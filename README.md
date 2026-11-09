@@ -69,6 +69,33 @@ python3 run_webui.py                    # both desk skins on localhost:8000
 - `.kiro/` — steering and the spec files this project was built from
 - `docs/` — story, design briefs, house staff, and build notes
 
+## The same shape, in regulation
+
+The mortuary is the smallest honest place to show the pattern, but the
+pattern is not really about mortuaries. The EU AI Act asks deployers of
+AI systems for records in four places — and a gate that measures before
+it allows produces exactly those records as a by-product:
+
+- **Article 9 (risk management):** every refusal is a logged risk event,
+  with a machine-readable reason name and a timestamp, queryable by
+  reason and period.
+- **Article 12 (record-keeping):** every claim, verdict, and receipt is
+  retained in an append-only, hash-chained ledger. An auditor verifies
+  completeness by recomputing the chain, not by trusting the operator.
+- **Article 13 (transparency):** every allowed action carries a receipt
+  a third party can verify — the seal was valid, the check ran, the
+  verdict was recorded — without access to any model internals.
+- **Article 72 (post-market monitoring):** the ledger aggregates —
+  allow rate, refusal rate, refusal reasons over time — are the
+  monitoring feed.
+
+Stated precisely: Skeleton Crew certifies compliance with nothing. It
+demonstrates the record-producing layer those duties presuppose, and it
+draws the line the Act is reaching for — the gate verifies the seal and
+the check, never the world. Whether the desks hold wills or an agent's
+tool calls, nothing is asserted without a verdict, and no verdict exists
+without a receipt.
+
 ## How it was built
 
 Built with **Kiro** (spec-driven development, driven through the Kiro CLI
