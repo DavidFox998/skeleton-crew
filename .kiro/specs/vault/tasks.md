@@ -28,3 +28,25 @@
 ## Out of scope
 
 - Web skin for the Vault (separate, later task). Film/story documents under `docs/`.
+
+## Ratification (David, 2026-11-08, against docs/BUNDLE-DESK-PLAN.md)
+
+The three choices the build session left open, decided against the plan
+text and ratified as built:
+
+1. Precedence file_changed > file_missing > file_added (then sorted
+   path). The plan requires naming "the first difference" over a
+   canonical-order manifest; this is a deterministic first, and the full
+   changed/missing/added lists are recorded in the receipt observations,
+   so no difference is hidden by the naming order. RATIFIED.
+2. Certificate construction. The plan's mechanics are verbatim: "per-file
+   SHA-256 manifest in canonical order (path:hash table), one bundle
+   certificate = hash of the table," with the lock record required to
+   "recompute to its own certificate." The build implements exactly this.
+   No receipt-chain binding of per-file seals is in the plan; the doubt
+   came from a looser paraphrase in the session prompt, not from the
+   plan. RATIFIED as specified.
+3. B5 runs on a fresh chain per scenario, matching the house scenario
+   pattern of both other desks; the plan's requirement — "PASS with the
+   original certificate" — is met, and a same-chain refused-then-restored
+   test also passes. RATIFIED.
