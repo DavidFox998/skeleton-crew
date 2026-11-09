@@ -1,7 +1,7 @@
 """
 webui.server
 ~~~~~~~~~~~~
-ThreadingHTTPServer and EstateHandler for The Estate Desk.
+ThreadingHTTPServer and HouseHandler for The Estate Desk and The Notices Desk.
 
 Route dispatch lives here. No HTML generation, no gate logic.
 
@@ -31,11 +31,11 @@ if TYPE_CHECKING:
 # ---------------------------------------------------------------------------
 
 
-class EstateHandler(BaseHTTPRequestHandler):
-    """HTTP request handler for The Estate Desk.
+class HouseHandler(BaseHTTPRequestHandler):
+    """HTTP request handler for both desks (Estate and Notices).
 
-    The class-level ``register`` attribute must be set on the class before
-    ``serve_forever()`` is called.  This is the standard http.server pattern
+    The class-level ``register`` and ``notices_register`` attributes must be
+    set on the class before ``serve_forever()`` is called.  This is the standard http.server pattern
     for sharing state across per-request handler instances.
     """
 
@@ -360,19 +360,30 @@ class EstateHandler(BaseHTTPRequestHandler):
         sys.stderr.write(f"{self.address_string()} - - [{self.log_date_time_string()}] {fmt % args}\n")
 
 
+# Backward-compatible name: the estate routes are served by HouseHandler.
+EstateHandler = HouseHandler
+
+
 # ---------------------------------------------------------------------------
 # Server startup
 # ---------------------------------------------------------------------------
 
 
-def run(host: str = "127.0.0.1", port: int = 8000, register: HouseRegister | None = None) -> None:
+def run(
+    host: str = "127.0.0.1",
+    port: int = 8000,
+    register: HouseRegister | None = None,
+    notices_register: NoticesRegister | None = None,
+) -> None:
     """Start the ThreadingHTTPServer. Blocks until KeyboardInterrupt."""
     if register is not None:
-        EstateHandler.register = register
-    if not hasattr(EstateHandler, "notices_register"):
-        EstateHandler.notices_register = _default_notices_register()
+        HouseHandler.register = register
+    if notices_register is not None:
+        HouseHandler.notices_register = notices_register
+    elif not hasattr(HouseHandler, "notices_register"):
+        HouseHandler.notices_register = _default_notices_register()
 
-    with ThreadingHTTPServer((host, port), EstateHandler) as httpd:
+    with ThreadingHTTPServer((host, port), HouseHandler) as httpd:
         sys.stderr.write(f"The Estate Desk is open at http://{host}:{port}/\n")
         sys.stderr.flush()
         try:
@@ -415,6 +426,7 @@ def _default_notices_register() -> NoticesRegister:
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     register = _default_register()
-    EstateHandler.register = register
-    EstateHandler.notices_register = _default_notices_register()
-    run(host="127.0.0.1", port=port, register=register)
+    notices_register = _default_notices_register()
+    HouseHandler.register = register
+    HouseHandler.notices_register = notices_register
+    run(host="127.0.0.1", port=port, register=register, notices_register=notices_register)
