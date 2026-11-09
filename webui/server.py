@@ -1,7 +1,7 @@
 """
 webui.server
 ~~~~~~~~~~~~
-ThreadingHTTPServer and HouseHandler for The Estate Desk and The Notices Desk.
+ThreadingHTTPServer and HouseHandler for The Estate Desk, The Notices Desk and The Vault.
 
 Route dispatch lives here. No HTML generation, no gate logic.
 
@@ -15,16 +15,27 @@ from __future__ import annotations
 import os
 import pathlib
 import sys
+import threading
 import traceback
 import urllib.parse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from typing import TYPE_CHECKING
 
 from webui import render
-from webui.state import NOTICES_SCENARIO_DEFINITIONS, SCENARIO_DEFINITIONS, HouseRegister, NoticesRegister
+from webui.state import (
+    NOTICES_SCENARIO_DEFINITIONS,
+    SCENARIO_DEFINITIONS,
+    VAULT_SCENARIO_DEFINITIONS,
+    HouseRegister,
+    NoticesRegister,
+    VaultRegister,
+)
 
 if TYPE_CHECKING:
     pass
+
+_VAULT_INIT_LOCK = threading.Lock()
+
 
 # ---------------------------------------------------------------------------
 # Handler
@@ -41,6 +52,7 @@ class HouseHandler(BaseHTTPRequestHandler):
 
     register: HouseRegister  # set on class before serve_forever()
     notices_register: NoticesRegister  # set on class before serve_forever()
+    vault_register: VaultRegister | None = None  # built lazily if not set
 
     # ── Routing ───────────────────────────────────────────────────────────
 
@@ -60,6 +72,12 @@ class HouseHandler(BaseHTTPRequestHandler):
                     self._get_notices()
                 case "/notices/archive":
                     self._get_notices_archive()
+                case "/vault":
+                    self._get_vault()
+                case "/vault/desk":
+                    self._get_vault_desk()
+                case "/vault/archive":
+                    self._get_vault_archive()
                 case _:
                     self._send_404()
         except Exception:
@@ -87,6 +105,12 @@ class HouseHandler(BaseHTTPRequestHandler):
                     self._post_notices_archive_verify()
                 case "/notices/archive/tamper":
                     self._post_notices_archive_tamper()
+                case "/vault/preset":
+                    self._post_vault_preset()
+                case "/vault/archive/verify":
+                    self._post_vault_archive_verify()
+                case "/vault/archive/tamper":
+                    self._post_vault_archive_tamper()
                 case _:
                     self._send_404()
         except Exception:
@@ -314,6 +338,60 @@ class HouseHandler(BaseHTTPRequestHandler):
         body = render.render_notices_archive(chain, tamper_result=tamper, tamper_demo_ran=True)
         self._send_html(render.notices_page_shell("The Notices Desk — Notice Archive", body))
 
+    # ── Vault handlers ───────────────────────────────────────────────────
+
+    def _vault(self) -> VaultRegister:
+        """Return the vault register, building the default one on first use."""
+        cls = type(self)
+        with _VAULT_INIT_LOCK:
+            if cls.vault_register is None:
+                cls.vault_register = _default_vault_register()
+            return cls.vault_register
+
+    def _get_vault(self) -> None:
+        vr = self._vault()
+        body = render.render_bundle(vr.lock_record, vr.papers())
+        self._send_html(render.vault_page_shell("The Vault \u2014 The Bundle", body))
+
+    def _get_vault_desk(self) -> None:
+        body = render.render_vault_desk(VAULT_SCENARIO_DEFINITIONS)
+        self._send_html(render.vault_page_shell("The Vault \u2014 Release Desk", body))
+
+    def _get_vault_archive(self) -> None:
+        body = render.render_vault_archive(self._vault().chain_snapshot())
+        self._send_html(render.vault_page_shell("The Vault \u2014 Vault Archive", body))
+
+    def _post_vault_preset(self) -> None:
+        form = self._read_form()
+        preset_list = form.get("preset", [])
+        if not preset_list:
+            self._send_400("Missing field: preset")
+            return
+        label = preset_list[0]
+        try:
+            verdict, receipt, tamper_error = self._vault().adjudicate_preset(label)
+        except KeyError as exc:
+            self._send_400(str(exc))
+            return
+        body = render.render_vault_desk_with_result(
+            VAULT_SCENARIO_DEFINITIONS, label, verdict, receipt, tamper_error
+        )
+        self._send_html(render.vault_page_shell("The Vault \u2014 Release Desk", body))
+
+    def _post_vault_archive_verify(self) -> None:
+        vr = self._vault()
+        replay = vr.verify_vault_chain()
+        body = render.render_vault_archive(vr.chain_snapshot(), replay_result=replay)
+        self._send_html(render.vault_page_shell("The Vault \u2014 Vault Archive", body))
+
+    def _post_vault_archive_tamper(self) -> None:
+        vr = self._vault()
+        tamper = vr.tamper_demo()
+        body = render.render_vault_archive(
+            vr.chain_snapshot(), tamper_result=tamper, tamper_demo_ran=True
+        )
+        self._send_html(render.vault_page_shell("The Vault \u2014 Vault Archive", body))
+
     # ── Utilities ─────────────────────────────────────────────────────────
 
     def _read_form(self) -> dict[str, list[str]]:
@@ -374,6 +452,7 @@ def run(
     port: int = 8000,
     register: HouseRegister | None = None,
     notices_register: NoticesRegister | None = None,
+    vault_register: VaultRegister | None = None,
 ) -> None:
     """Start the ThreadingHTTPServer. Blocks until KeyboardInterrupt."""
     if register is not None:
@@ -382,6 +461,10 @@ def run(
         HouseHandler.notices_register = notices_register
     elif not hasattr(HouseHandler, "notices_register"):
         HouseHandler.notices_register = _default_notices_register()
+    if vault_register is not None:
+        HouseHandler.vault_register = vault_register
+    elif HouseHandler.vault_register is None:
+        HouseHandler.vault_register = _default_vault_register()
 
     with ThreadingHTTPServer((host, port), HouseHandler) as httpd:
         sys.stderr.write(f"The Estate Desk is open at http://{host}:{port}/\n")
@@ -423,10 +506,18 @@ def _default_notices_register() -> NoticesRegister:
     )
 
 
+def _default_vault_register() -> VaultRegister:
+    """Construct a VaultRegister from the standard fixtures directory."""
+    root = pathlib.Path(__file__).parent.parent
+    return VaultRegister(str(root / "fixtures"))
+
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     register = _default_register()
     notices_register = _default_notices_register()
     HouseHandler.register = register
     HouseHandler.notices_register = notices_register
-    run(host="127.0.0.1", port=port, register=register, notices_register=notices_register)
+    HouseHandler.vault_register = _default_vault_register()
+    run(host="127.0.0.1", port=port, register=register, notices_register=notices_register,
+        vault_register=HouseHandler.vault_register)

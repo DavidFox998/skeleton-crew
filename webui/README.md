@@ -79,3 +79,13 @@ in `fixtures/`. No mocking of gate logic.
 - All user-supplied strings are escaped with `html.escape()` before insertion into HTML.
 - The `webui/` package contains no verdict logic, no measurement logic, and no
   mandate-verification logic. It calls `gate_core.adjudicate()` and renders what returns.
+
+## The Vault (third desk)
+
+| Room | URL | Purpose |
+|------|-----|---------|
+| The Bundle | `GET /vault` | The sealed estate file: four papers, their seals, the bundle certificate and lock-record seal. |
+| Release Desk | `GET /vault/desk` | Presets B1–B6; each presents a bundle for release and shows the gate's stamp and receipt. |
+| Vault Archive | `GET /vault/archive` | The vault's own chain, verification, and tamper demonstration on a copy. |
+
+Verdicts come from `gate_core.adjudicate()` with `vault.VaultMeasurer`; the skin only displays them. A lock record that does not recompute (B6) is shown as `REFUSED · seal_broken`, HTTP 200, and nothing is appended to the vault chain. Spec: `.kiro/specs/vault-ui/`; brief: `docs/DESIGN-BRIEF-VAULT-SKIN.md`.

@@ -868,3 +868,231 @@ class NoticesRegister:
         chain_copy[-1] = tampered_receipt
 
         return _verify_chain(chain_copy)
+
+
+# ===========================================================================
+# The Vault — register and preset definitions
+# ===========================================================================
+
+import os as _os
+import shutil as _shutil
+import tempfile as _tempfile
+
+from vault.claims import present_bundle as _present_bundle
+from vault.lock import lock_bundle as _lock_bundle
+from vault.measurer import VaultMeasurer as _VaultMeasurer
+from vault.scenarios import (
+    BUNDLE_ID as _VAULT_BUNDLE_ID,
+    DEFAULT_FIXTURES as _VAULT_DEFAULT_FIXTURES,
+    build_bundle as _build_vault_bundle,
+)
+
+
+VAULT_SCENARIO_DEFINITIONS: list[dict] = [
+    {
+        "label": "B1",
+        "description": "The bundle presented untouched",
+        "situation": "untouched",
+        "expected_verdict": "PASS",
+    },
+    {
+        "label": "B2",
+        "description": "One paper altered — an inventory figure",
+        "situation": "inventory figure altered",
+        "expected_verdict": "REFUSED · file_changed",
+    },
+    {
+        "label": "B3",
+        "description": "A stray paper added to the bundle",
+        "situation": "stray paper added",
+        "expected_verdict": "REFUSED · file_added",
+    },
+    {
+        "label": "B4",
+        "description": "A paper removed — the death record",
+        "situation": "death record removed",
+        "expected_verdict": "REFUSED · file_missing",
+    },
+    {
+        "label": "B5",
+        "description": "The bundle restored, presented again under the original certificate",
+        "situation": "death record removed, then restored",
+        "expected_verdict": "PASS",
+    },
+    {
+        "label": "B6",
+        "description": "The lock record itself altered after sealing",
+        "situation": "lock record altered",
+        "expected_verdict": "REFUSED · seal_broken",
+    },
+]
+
+
+def _vault_alter_inventory(root: str) -> None:
+    path = _os.path.join(root, "inventory.json")
+    with open(path, "rb") as fh:
+        data = fh.read()
+    with open(path, "wb") as fh:
+        fh.write(data.replace(b'"appraised_value":520', b'"appraised_value":5200'))
+
+
+def _vault_add_stray(root: str) -> None:
+    with open(_os.path.join(root, "stray_note.txt"), "w", encoding="utf-8") as fh:
+        fh.write("a paper nobody sealed")
+
+
+def _vault_remove_death_record(root: str) -> None:
+    _os.remove(_os.path.join(root, "death_record.json"))
+
+
+def _vault_remove_then_restore(root: str) -> None:
+    path = _os.path.join(root, "death_record.json")
+    with open(path, "rb") as fh:
+        original = fh.read()
+    _os.remove(path)
+    with open(path, "wb") as fh:
+        fh.write(original)
+
+
+# How each preset leaves the papers on the table.  These only arrange the
+# papers; every judgement is made by the gate.
+_VAULT_ARRANGEMENTS = {
+    "B1": None,
+    "B2": _vault_alter_inventory,
+    "B3": _vault_add_stray,
+    "B4": _vault_remove_death_record,
+    "B5": _vault_remove_then_restore,
+    "B6": None,  # papers untouched; the lock record is the thing altered
+}
+
+
+class VaultRegister:
+    """Owns all mutable server state for The Vault.
+
+    Holds the sealed lock record of the house bundle and ONE append-only
+    vault chain.  No HTML, no HTTP logic, no verdict logic: every verdict
+    comes from ``gate_core.adjudicate()`` with the ``VaultMeasurer``.
+
+    Args:
+        fixtures_dir: Directory holding the four papers of the estate file.
+    """
+
+    def __init__(self, fixtures_dir: str = _VAULT_DEFAULT_FIXTURES) -> None:
+        self._fixtures_dir = fixtures_dir
+        with _tempfile.TemporaryDirectory() as tmp:
+            root = _os.path.join(tmp, "bundle")
+            _build_vault_bundle(root, fixtures_dir)
+            self._lock_record: _SealedMandate = _lock_bundle(_VAULT_BUNDLE_ID, root)
+        self._measurer = _VaultMeasurer()
+        self._chain: list[_Receipt] = []
+        self._mutex = threading.Lock()
+
+    # ── Properties ────────────────────────────────────────────────────────
+
+    @property
+    def lock_record(self) -> _SealedMandate:
+        """The sealed lock record (read-only use by render helpers)."""
+        return self._lock_record
+
+    @property
+    def bundle_id(self) -> str:
+        return _VAULT_BUNDLE_ID
+
+    def papers(self) -> list[tuple[str, str]]:
+        """Return [(path, sha256)] from the lock record, in canonical order."""
+        return list(self._lock_record.content["files"].items())
+
+    # ── Chain accessors ───────────────────────────────────────────────────
+
+    def chain_snapshot(self) -> list[_Receipt]:
+        with self._mutex:
+            return list(self._chain)
+
+    def verify_vault_chain(self) -> _ReplayResult:
+        with self._mutex:
+            snapshot = list(self._chain)
+        return _verify_chain(snapshot)
+
+    # ── Adjudication ──────────────────────────────────────────────────────
+
+    def adjudicate_preset(
+        self,
+        label: str,
+    ) -> tuple[Verdict | None, _Receipt | None, bool]:
+        """Present the bundle for release in the situation of preset B1–B6.
+
+        Returns:
+            (verdict, receipt, tamper_error)
+            - Normal verdicts: (Verdict, Receipt, False) — receipt appended.
+            - Hard tamper (lock record does not recompute):
+              (None, None, True) — nothing appended.
+
+        Raises:
+            KeyError: if label is not in VAULT_SCENARIO_DEFINITIONS.
+        """
+        if not any(d["label"] == label for d in VAULT_SCENARIO_DEFINITIONS):
+            raise KeyError(f"Unknown vault scenario label: {label!r}")
+
+        with self._mutex:
+            lock = self._lock_record
+            if label == "B6":
+                # Same alteration vault.scenarios applies: original seal,
+                # altered table.
+                forged_files = {**lock.content["files"], "inventory.json": "0" * 64}
+                lock = _SealedMandate(
+                    domain=lock.domain,
+                    content={**lock.content, "files": forged_files},
+                    seal=lock.seal,
+                )
+
+            with _tempfile.TemporaryDirectory() as tmp:
+                root = _os.path.join(tmp, "bundle")
+                _build_vault_bundle(root, self._fixtures_dir)
+                arrange = _VAULT_ARRANGEMENTS[label]
+                if arrange is not None:
+                    arrange(root)
+                claim = _present_bundle(_VAULT_BUNDLE_ID, root)
+
+            try:
+                verdict, receipt = _adjudicate_gate(
+                    claim,
+                    lock,
+                    self._measurer,
+                    self._chain,
+                    timestamp_utc=_notices_utc_now(),
+                )
+                return verdict, receipt, False
+            except _MandateTamperError:
+                return None, None, True
+
+    # ── Archive operations ────────────────────────────────────────────────
+
+    def tamper_demo(self) -> _ReplayResult:
+        """Run the tamper demonstration on a COPY of the vault chain.
+
+        Does NOT modify self._chain.
+        """
+        with self._mutex:
+            chain_copy = copy.deepcopy(self._chain)
+
+        if not chain_copy:
+            return _ReplayResult(ok=True, failure_index=None, failure_reason=None)
+
+        last = chain_copy[-1]
+        mutated_claim = copy.deepcopy(last.claim)
+        payload = mutated_claim.get("payload")
+        if isinstance(payload, dict):
+            payload["bundle_id"] = "TAMPERED_FOR_DEMO"
+        else:
+            mutated_claim["_tampered"] = True
+
+        chain_copy[-1] = _Receipt(
+            claim=mutated_claim,
+            measurements=last.measurements,
+            measurement_error=last.measurement_error,
+            verdict=last.verdict,
+            timestamp_utc=last.timestamp_utc,
+            previous_hash=last.previous_hash,
+            own_hash=last.own_hash,  # original hash — now stale
+        )
+        return _verify_chain(chain_copy)

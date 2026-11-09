@@ -21,6 +21,7 @@ if TYPE_CHECKING:
     from citation_gate.sources import SourceRegistry
     from citation_gate.publish import PublishDecision
     from webui.state import AssertionEntry
+    from gate_core.mandate import SealedMandate
 
 # ---------------------------------------------------------------------------
 # Escaping helper
@@ -416,6 +417,13 @@ table.fact-table td {
     padding: 0.5rem 0;
     border-top: 1px solid var(--hairline);
 }
+
+/* Release stamp (The Vault) */
+.release-stamp {
+    margin-top: 0.75rem;
+    padding: 0.5rem 0;
+    border-top: 1px solid var(--hairline);
+}
 """
 
 
@@ -424,9 +432,9 @@ table.fact-table td {
 # ---------------------------------------------------------------------------
 
 
-def page_shell(title: str, body_html: str) -> str:
-    """Return a complete <!DOCTYPE html> document with embedded CSS and nav."""
-    nav = (
+def _house_nav() -> str:
+    """Return the shared three-desk navigation (Estate · Notices · Vault)."""
+    return (
         '<nav>'
         '<span class="nav-group">'
         '<a href="/">Register</a>'
@@ -439,8 +447,19 @@ def page_shell(title: str, body_html: str) -> str:
         '<a href="/notices">Notices</a>'
         '<a href="/notices/archive">Notice Archive</a>'
         '</span>'
+        '<span class="nav-separator">·</span>'
+        '<span class="nav-group">'
+        '<a href="/vault">Bundle</a>'
+        '<a href="/vault/desk">Release</a>'
+        '<a href="/vault/archive">Vault Archive</a>'
+        '</span>'
         '</nav>'
     )
+
+
+def page_shell(title: str, body_html: str) -> str:
+    """Return a complete <!DOCTYPE html> document with embedded CSS and nav."""
+    nav = _house_nav()
     return (
         "<!DOCTYPE html>\n"
         "<html lang=\"en\">\n"
@@ -466,21 +485,7 @@ def page_shell(title: str, body_html: str) -> str:
 
 def notices_page_shell(title: str, body_html: str) -> str:
     """Return a complete <!DOCTYPE html> document for The Notices Desk."""
-    nav = (
-        '<nav>'
-        '<span class="nav-group">'
-        '<a href="/">Register</a>'
-        '<a href="/desk">Desk</a>'
-        '<a href="/archive">Archive</a>'
-        '</span>'
-        '<span class="nav-separator">·</span>'
-        '<span class="nav-group">'
-        '<a href="/notices/sources">Sources</a>'
-        '<a href="/notices">Notices</a>'
-        '<a href="/notices/archive">Notice Archive</a>'
-        '</span>'
-        '</nav>'
-    )
+    nav = _house_nav()
     return (
         "<!DOCTYPE html>\n"
         "<html lang=\"en\">\n"
@@ -497,6 +502,31 @@ def notices_page_shell(title: str, body_html: str) -> str:
         "  <h1>The Notices Desk</h1>\n"
         "  <p class=\"subtitle\">Nothing is printed here unmeasured.</p>\n"
         f"  {nav}\n"
+        "</header>\n"
+        f"<main>{body_html}</main>\n"
+        "</body>\n"
+        "</html>\n"
+    )
+
+
+def vault_page_shell(title: str, body_html: str) -> str:
+    """Return a complete <!DOCTYPE html> document for The Vault."""
+    return (
+        "<!DOCTYPE html>\n"
+        "<html lang=\"en\">\n"
+        "<head>\n"
+        "  <meta charset=\"utf-8\">\n"
+        "  <meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n"
+        f"  <title>{_e(title)}</title>\n"
+        "  <style>\n"
+        f"{css()}"
+        "  </style>\n"
+        "</head>\n"
+        "<body>\n"
+        "<header>\n"
+        "  <h1>The Vault</h1>\n"
+        "  <p class=\"subtitle\">Nothing leaves this house unmeasured \u2014 not even the records.</p>\n"
+        f"  {_house_nav()}\n"
         "</header>\n"
         f"<main>{body_html}</main>\n"
         "</body>\n"
@@ -1529,6 +1559,210 @@ def render_notices_archive(
 
     return (
         f"<h2>Notice Chain — {_e(n)} receipt{'s' if n != 1 else ''}.</h2>"
+        f"{receipts_html}"
+        "<hr>"
+        "<h3>Verify Chain Integrity</h3>"
+        f"{verify_form}"
+        f"{tamper_form}"
+    )
+
+
+# ===========================================================================
+# The Vault render functions
+# ===========================================================================
+
+
+def render_bundle(lock_record: "SealedMandate", papers: "list[tuple[str, str]]") -> str:
+    """Render The Bundle room body (GET /vault): the sealed estate file."""
+    content = lock_record.content
+    rows = "".join(
+        f'<tr><td>{_e(path)}</td><td><span class="hash paper-seal">{_e(seal)}</span></td></tr>'
+        for path, seal in papers
+    )
+    table = (
+        '<table class="fact-table">'
+        "<thead><tr><th>Paper</th><th>Seal (SHA-256)</th></tr></thead>"
+        f"<tbody>{rows}</tbody>"
+        "</table>"
+    )
+    return (
+        "<h2>The Bundle</h2>"
+        "<p>The whole estate file, sealed at intake as one bundle under a single "
+        "chain certificate. Each paper's seal is the SHA-256 of its bytes; the "
+        "certificate is the SHA-256 of this table.</p>"
+        "<hr>"
+        '<div class="source-card">'
+        f"<h3>{_e(content['bundle_id'])}</h3>"
+        f'<p class="ghost">Lock record \u00b7 {_e(len(papers))} papers</p>'
+        f'<p>Bundle certificate: <span class="hash certificate">{_e(content["certificate"])}</span></p>'
+        f'<p>Lock record seal: <span class="hash lock-seal">{_e(lock_record.seal)}</span></p>'
+        f"{table}"
+        "</div>"
+    )
+
+
+def render_release_stamp(receipt: "Receipt") -> str:
+    """Render the release stamp for an issued receipt.
+
+    Everything shown is read from the receipt the gate issued: its verdict and
+    its measurements.  Nothing is decided here.
+    """
+    verdict = receipt.verdict
+    obs = receipt.measurements or {}
+    certificate = obs.get("certificate")
+    cert_html = (
+        f'<p>Measured against certificate: <span class="hash certificate">{_e(certificate)}</span></p>'
+        if certificate else ""
+    )
+    if verdict.get("type") == "pass":
+        return (
+            '<div class="release-stamp">'
+            '<p class="verdict-pass">PASS</p>'
+            "<p>The bundle may leave the house.</p>"
+            f"{cert_html}"
+            f"<p><small>Papers verified: {_e(obs.get('file_count', ''))}</small></p>"
+            "</div>"
+        )
+    name = _e(verdict.get("name", "unknown"))
+    path_html = (
+        f'<p>Paper: <span class="hash paper-path">{_e(obs["path"])}</span></p>'
+        if "path" in obs else ""
+    )
+    return (
+        '<div class="release-stamp">'
+        f'<p class="verdict-refused">REFUSED \u00b7 {name}</p>'
+        f"{path_html}"
+        f"{cert_html}"
+        "<p>The bundle is held.</p>"
+        "</div>"
+    )
+
+
+def _render_vault_preset_block(
+    defn: dict,
+    resolved: bool = False,
+    result_html: str = "",
+) -> str:
+    label = _e(defn["label"])
+    result_section = f'<div class="verdict-result">{result_html}</div>' if result_html else ""
+    ghost_class = "resolved" if resolved else "ghost"
+    return (
+        '<div class="preset-block">'
+        f'<div class="claim-block {ghost_class}">'
+        f'<p><span class="preset-label">{label}</span>{_e(defn["description"])}</p>'
+        f"<p><small>Presented: {_e(defn['situation'])} \u00b7 Expected: {_e(defn['expected_verdict'])}</small></p>"
+        '<form method="post" action="/vault/preset" style="margin-top:0.75rem;">'
+        f'<input type="hidden" name="preset" value="{label}">'
+        f'<input type="submit" value="Run {label}">'
+        "</form>"
+        "</div>"
+        f"{result_section}"
+        "</div>"
+    )
+
+
+def render_vault_desk(scenario_defs: list[dict]) -> str:
+    """Render the Release Desk body (GET /vault/desk)."""
+    return render_vault_desk_with_result(scenario_defs, None, None, None, False)
+
+
+def render_vault_desk_with_result(
+    scenario_defs: list[dict],
+    label: "str | None",
+    verdict: object,
+    receipt: "Receipt | None",
+    tamper_error: bool,
+) -> str:
+    """Release Desk body, with the result injected after the matching preset."""
+    result_html = ""
+    if label is not None:
+        if tamper_error:
+            result_html = (
+                '<div class="seal-broken-notice">'
+                '<p><span class="verdict-refused">REFUSED \u00b7 seal_broken</span></p>'
+                "<p>Lock record verification failed. This event was not recorded in the vault chain.</p>"
+                "</div>"
+            )
+        elif receipt is not None:
+            result_html = render_release_stamp(receipt) + render_receipt(receipt)
+        else:
+            result_html = '<p class="ghost">No result.</p>'
+
+    blocks = "".join(
+        _render_vault_preset_block(d, resolved=True, result_html=result_html)
+        if d["label"] == label else _render_vault_preset_block(d)
+        for d in scenario_defs
+    )
+    return (
+        "<h2>The Release Desk</h2>"
+        "<p>Six bundles presented for release, each re-measured against the lock record.</p>"
+        "<hr>"
+        f"{blocks}"
+    )
+
+
+def render_vault_archive(
+    chain: "list[Receipt]",
+    replay_result: "ReplayResult | None" = None,
+    tamper_result: "ReplayResult | None" = None,
+    tamper_demo_ran: bool = False,
+) -> str:
+    """Render the Vault Archive body (GET /vault/archive)."""
+    n = len(chain)
+    receipts_html = "".join(
+        f'<div class="receipt-card"><p class="receipt-index">Receipt #{i + 1}</p>'
+        f"{render_receipt(r)}</div>"
+        for i, r in enumerate(chain)
+    ) or '<p class="ghost">No receipts in the vault chain yet.</p>'
+
+    replay_section = ""
+    if replay_result is not None:
+        if replay_result.ok:
+            ok_text = f"Chain intact \u2014 {n} receipt{'s' if n != 1 else ''} verified."
+            replay_section = f'<div class="chain-ok">{_e(ok_text)}</div>'
+        else:
+            replay_section = (
+                '<div class="chain-fail">'
+                f"<p>Chain verification FAILED at receipt index {_e(replay_result.failure_index)}.</p>"
+                f"<p>Reason: {_e(replay_result.failure_reason)}</p>"
+                "</div>"
+            )
+    verify_form = (
+        '<form method="post" action="/vault/archive/verify" style="margin-top:1rem;">'
+        '<input type="submit" value="Verify chain integrity">'
+        "</form>"
+        f"{replay_section}"
+    )
+
+    tamper_section = ""
+    if tamper_demo_ran and tamper_result is not None:
+        if tamper_result.ok:
+            tamper_section = (
+                '<div class="tamper-demo-result">'
+                '<div class="chain-ok">Chain intact (no receipts to tamper \u2014 chain is empty).</div>'
+                '<p class="not-modified-notice">The vault chain was not modified.</p>'
+                "</div>"
+            )
+        else:
+            tamper_section = (
+                '<div class="tamper-demo-result chain-fail">'
+                f"<p>Tamper demonstration: chain verification FAILED at receipt index {_e(tamper_result.failure_index)}.</p>"
+                f"<p>Reason: {_e(tamper_result.failure_reason)}</p>"
+                '<p class="not-modified-notice">The vault chain was not modified.</p>'
+                "</div>"
+            )
+    tamper_form = (
+        "<hr>"
+        "<h3>Tamper Demonstration</h3>"
+        "<p>Runs verify_chain on a deep copy of the vault chain with one receipt mutated. "
+        "The vault chain itself is never modified by this demonstration.</p>"
+        '<form method="post" action="/vault/archive/tamper" style="margin-top:0.5rem;">'
+        '<input type="submit" value="Run tamper demonstration">'
+        "</form>"
+        f"{tamper_section}"
+    )
+    return (
+        f"<h2>Vault Chain \u2014 {_e(n)} receipt{'s' if n != 1 else ''}.</h2>"
         f"{receipts_html}"
         "<hr>"
         "<h3>Verify Chain Integrity</h3>"

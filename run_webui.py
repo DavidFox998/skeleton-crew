@@ -12,7 +12,7 @@ import argparse
 import os
 import pathlib
 
-from webui.state import HouseRegister, NoticesRegister
+from webui.state import HouseRegister, NoticesRegister, VaultRegister
 from webui.server import HouseHandler, run
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
@@ -48,12 +48,15 @@ def main() -> None:
         family_record_path=str(FIXTURES / "family_record.json"),
     )
     HouseHandler.register = register
+    vault_register = VaultRegister(str(FIXTURES))
     HouseHandler.notices_register = notices_register
+    HouseHandler.vault_register = vault_register
     run(
         host=args.host,
         port=args.port,
         register=register,
         notices_register=notices_register,
+        vault_register=vault_register,
     )
 
 
