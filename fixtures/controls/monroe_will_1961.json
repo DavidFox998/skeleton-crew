@@ -1,0 +1,65 @@
+{
+  "bequests": [
+    {
+      "beneficiary": "Lee Strasberg",
+      "item": "75 percent of the residuary estate",
+      "sign": "Residuary75"
+    },
+    {
+      "beneficiary": "Dr. Marianne Kris",
+      "item": "25 percent of the residuary estate, for the furtherance of psychiatric work",
+      "sign": "Residuary25"
+    },
+    {
+      "beneficiary": "Lee Strasberg",
+      "item": "All personal effects and clothing",
+      "sign": "Effects"
+    },
+    {
+      "beneficiary": "Gladys Baker",
+      "item": "$100,000 held in trust for her care",
+      "sign": "MotherTrust"
+    },
+    {
+      "beneficiary": "Bernice Miracle",
+      "item": "$10,000",
+      "sign": "HalfSister"
+    },
+    {
+      "beneficiary": "May Reis",
+      "item": "$10,000",
+      "sign": "Secretary"
+    },
+    {
+      "beneficiary": "Norman and Hedda Rosten",
+      "item": "$5,000 each",
+      "sign": "Friends"
+    }
+  ],
+  "condition": "Control encoding of Monroe's will of January 1961 on the desk's twelve-slot frame: one slot per bequest; the five empty slots are heads under which the will makes no specific bequest (the Brentwood house among them) \u2014 all such property fell to the residue.",
+  "empty_signs": [
+    "House",
+    "Automobile",
+    "Furniture",
+    "HouseholdGoods",
+    "OtherAssets"
+  ],
+  "sealed_date": "1961-01-14",
+  "slots": [
+    "Residuary75",
+    "Residuary25",
+    "Effects",
+    "MotherTrust",
+    "HalfSister",
+    "Secretary",
+    "Friends",
+    "House",
+    "Automobile",
+    "Furniture",
+    "HouseholdGoods",
+    "OtherAssets"
+  ],
+  "stated_popcount": 7,
+  "testator": "Marilyn Monroe",
+  "vector": "111111100000"
+}

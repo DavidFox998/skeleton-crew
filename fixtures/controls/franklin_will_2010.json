@@ -1,0 +1,30 @@
+{
+  "bequests": [
+    {
+      "beneficiary": "Ted White Jr. and Kecalf Franklin in equal shares",
+      "item": "The Bloomfield Hills home",
+      "sign": "BloomfieldHouse"
+    },
+    {
+      "beneficiary": "Clarence Franklin",
+      "item": "Support for her eldest son",
+      "sign": "ClarenceSupport"
+    },
+    {
+      "beneficiary": "her four sons",
+      "item": "The residuary estate",
+      "sign": "Residuary"
+    }
+  ],
+  "condition": "Handwritten, notarized, kept in a locked cabinet. Required Ted and Kecalf to take business classes before benefiting (a condition on the bequests, not a bequest itself). Publicly reported as dated 2010; month not widely published, so the date is year-precision.",
+  "empty_signs": [],
+  "sealed_date": "2010",
+  "slots": [
+    "BloomfieldHouse",
+    "ClarenceSupport",
+    "Residuary"
+  ],
+  "stated_popcount": 3,
+  "testator": "Aretha Franklin",
+  "vector": "111"
+}

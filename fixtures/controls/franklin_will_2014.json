@@ -1,0 +1,30 @@
+{
+  "bequests": [
+    {
+      "beneficiary": "Kecalf Franklin",
+      "item": "The Bloomfield Hills home",
+      "sign": "BloomfieldHouse"
+    },
+    {
+      "beneficiary": "Clarence Franklin",
+      "item": "Support for her eldest son (brothers to check on him and give him money)",
+      "sign": "ClarenceSupport"
+    },
+    {
+      "beneficiary": "her four sons",
+      "item": "The residuary estate",
+      "sign": "Residuary"
+    }
+  ],
+  "condition": "Handwritten in a spiral notebook found under a couch cushion; signed 'A. Franklin' with a smiley face in the A. Names Kecalf Franklin executor (Ted White Jr. crossed out). The 2010 business-class condition is dropped. A Michigan jury ruled in July 2023 that this is her valid will.",
+  "empty_signs": [],
+  "sealed_date": "2014-03",
+  "slots": [
+    "BloomfieldHouse",
+    "ClarenceSupport",
+    "Residuary"
+  ],
+  "stated_popcount": 3,
+  "testator": "Aretha Franklin",
+  "vector": "111"
+}
