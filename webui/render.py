@@ -1094,8 +1094,8 @@ def render_sources(source_registry: "SourceRegistry") -> str:
         if source is None:
             cards += (
                 f'<div class="source-card">'
-                f"<h3>{_e(label)}</h3>"
-                f'<p class="ghost">Source not loaded.</p>'
+                f"<h3>{_e(source_id)}</h3>"
+                f'<p class="ghost">{_e(label)} — source not loaded.</p>'
                 f"</div>"
             )
             continue
@@ -1120,7 +1120,8 @@ def render_sources(source_registry: "SourceRegistry") -> str:
 
         cards += (
             f'<div class="source-card">'
-            f"<h3>{_e(label)}</h3>"
+            f"<h3>{_e(source_id)}</h3>"
+            f'<p class="ghost">{_e(label)}</p>'
             f"{seal_html}"
             f"{table_html}"
             f"</div>"
@@ -1149,10 +1150,10 @@ def render_assertion_builder(source_registry: "SourceRegistry") -> str:
         if not fact_table:
             continue
         options = "".join(
-            f'<option value="{_e(k)}">{_e(k)}</option>'
+            f'<option value="{_e(k)}">{_e(source_id)} — {_e(k)}</option>'
             for k in fact_table.keys()
         )
-        optgroups += f'<optgroup label="{_e(label)}">{options}</optgroup>'
+        optgroups += f'<optgroup label="{_e(source_id)}">{options}</optgroup>'
 
     # Citation options
     citation_opts = "".join(
@@ -1241,8 +1242,10 @@ def _render_notices_preset_block(
     assertion_previews = ""
     for phase in defn.get("phases", []):
         for a in phase.get("assertions", []):
+            citation = _e(a["citation"]) if a.get("citation") else "no citation"
             assertion_previews += (
-                f'<p class="ghost assertion-sentence">{_e(a["text"])}</p>'
+                f'<p class="ghost assertion-sentence">{_e(a["text"])} '
+                f'<small>key: {_e(a["fact_key"])} · citation: {citation}</small></p>'
             )
 
     result_section = f'<div class="verdict-result">{result_html}</div>' if result_html else ""
@@ -1352,7 +1355,7 @@ def render_notices_desk_with_preset_result(
         result_html = (
             '<div class="seal-broken-notice">'
             '<p><span class="verdict-refused">REFUSED · seal_broken</span></p>'
-            "<p>Mandate seal verification failed. This event was not recorded in the notices chain.</p>"
+            "<p>Source seal verification failed. This event was not recorded in the notices chain.</p>"
             "</div>"
         )
     else:
@@ -1424,7 +1427,7 @@ def render_notices_desk_with_assertion_result(
         assertion_result_html = (
             '<div class="seal-broken-notice">'
             '<p><span class="verdict-refused">REFUSED · seal_broken</span></p>'
-            "<p>Mandate seal verification failed. This assertion was not recorded in the notices chain or working draft.</p>"
+            "<p>Source seal verification failed. This assertion was not recorded in the notices chain.</p>"
             "</div>"
         )
     else:
@@ -1477,7 +1480,7 @@ def render_notices_archive(
     replay_section = ""
     if replay_result is not None:
         if replay_result.ok:
-            ok_text = f"Notices chain intact — {n} receipt{'s' if n != 1 else ''} verified."
+            ok_text = f"Chain intact — {n} receipt{'s' if n != 1 else ''} verified."
             replay_section = f'<div class="chain-ok">{_e(ok_text)}</div>'
         else:
             replay_section = (
@@ -1489,7 +1492,7 @@ def render_notices_archive(
 
     verify_form = (
         '<form method="post" action="/notices/archive/verify" style="margin-top:1rem;">'
-        '<input type="submit" value="Verify notices chain integrity">'
+        '<input type="submit" value="Verify chain integrity">'
         "</form>"
         f"{replay_section}"
     )
@@ -1500,7 +1503,7 @@ def render_notices_archive(
         if tamper_result.ok:
             tamper_section = (
                 '<div class="tamper-demo-result">'
-                '<div class="chain-ok">Notices chain intact (no receipts to tamper — chain is empty).</div>'
+                '<div class="chain-ok">Chain intact (no receipts to tamper — chain is empty).</div>'
                 '<p class="not-modified-notice">The notices chain was not modified.</p>'
                 "</div>"
             )
@@ -1525,7 +1528,7 @@ def render_notices_archive(
     )
 
     return (
-        f"<h2>Notices Chain — {_e(n)} receipt{'s' if n != 1 else ''}.</h2>"
+        f"<h2>Notice Chain — {_e(n)} receipt{'s' if n != 1 else ''}.</h2>"
         f"{receipts_html}"
         "<hr>"
         "<h3>Verify Chain Integrity</h3>"

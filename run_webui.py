@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Start the Executor web skin.
+"""Start the Estate Desk and Notices Desk web skin.
 
 Usage:
     python run_webui.py [--port N]
@@ -12,8 +12,8 @@ import argparse
 import os
 import pathlib
 
-from webui.state import HouseRegister
-from webui.server import EstateHandler, run
+from webui.state import HouseRegister, NoticesRegister
+from webui.server import HouseHandler, run
 
 FIXTURES = pathlib.Path(__file__).parent / "fixtures"
 
@@ -42,8 +42,19 @@ def main() -> None:
             str(FIXTURES / "death_record.json"),
         ],
     )
-    EstateHandler.register = register
-    run(host=args.host, port=args.port, register=register)
+    notices_register = NoticesRegister(
+        death_record_path=str(FIXTURES / "death_record.json"),
+        will_path=str(FIXTURES / "will_2024.json"),
+        family_record_path=str(FIXTURES / "family_record.json"),
+    )
+    HouseHandler.register = register
+    HouseHandler.notices_register = notices_register
+    run(
+        host=args.host,
+        port=args.port,
+        register=register,
+        notices_register=notices_register,
+    )
 
 
 if __name__ == "__main__":
